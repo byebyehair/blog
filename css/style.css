@@ -13,11 +13,11 @@ h1,h2,h3,h4,h5,h6 {
 }
 
 .lastmod {
-  color: #537563;
+  color: #217347;
 }
 
 .initpost {
-  color: #537563;
+  color: #217347;
 }
 
 .date {
@@ -31,7 +31,7 @@ ul {
 
 a {
 /*  color: #258852;*/
-  color: #537563;
+  color: #217347; 
   text-decoration: none;
   cursor: pointer;
   font-weight: 500;
