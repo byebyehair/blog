@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>好事发生</title>
+    <link>https://blog.hanyu.me/</link>
+    <description>Recent content on 好事发生</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en-us</language>
+    <lastBuildDate>Mon, 15 Jul 2024 23:18:00 +0800</lastBuildDate><atom:link href="https://blog.hanyu.me/index.xml" rel="self" type="application/rss+xml" />
+     
+    
+    
+    <item>
+      <title>要使用业务唯一ID做主键吗？</title>
+      <link>https://blog.hanyu.me/tech/4/</link>
+      <pubDate>Thu, 04 Jul 2024 17:51:21 +0800</pubDate>
+      
+      <guid>https://blog.hanyu.me/tech/4/</guid>
+      <description>&lt;p&gt;注意：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;本篇文章需阅读者掌握MySQL索引基本原理，可提前阅读  &lt;a href=&#34;https://mp.weixin.qq.com/s/5UbmpnxmIV9ZDnAF9KaYdg&#34;&gt;MySQL系列 | 浅尝MySQL索引&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;本篇文章涉及的V2帖子，没有特殊能力者，是访问不通的&lt;/li&gt;
+&lt;li&gt;本人无特殊能力去看V2帖子，是不小心在某个地方看到，已全然忘记出处，是一位遵纪守法的好公民&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr&gt;
+&lt;p&gt;看到V2一篇帖子中的提问：&lt;a href=&#34;https://go.lion.im/sk7qf&#34;&gt;https://go.lion.im/sk7qf &lt;/a&gt;  ，促使我写下了这篇文章。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://storage.hanyu.me/files/blog/tech/4/img/1.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;这位楼主的问题看似简单，但挺值得思考的。&lt;/p&gt;
+&lt;p&gt;这个问题我曾经想当然的认为，答案就应该是“需要使用自增ID列作为主键”，直到曾经一次滴滴的面试，被问到几乎同样的问题，才进行了深度的思考。&lt;/p&gt;
+&lt;p&gt;很多时候我们在设计数据库表的时候，明明已经有了一个逻辑上的唯一ID，却依然新建了一个自增的ID作为物理主键，在业务上却毫无用处，仿佛就像人要吃饭睡觉一样自然，why?&lt;/p&gt;
+&lt;h3 id=&#34;非自增主键会产生的问题&#34;&gt;非自增主键会产生的问题&lt;/h3&gt;
+&lt;p&gt;我们先来看看，为什么我们需要一个自增的主键？&lt;/p&gt;
+&lt;h4 id=&#34;性能问题&#34;&gt;性能问题&lt;/h4&gt;
+&lt;p&gt;MySQL InnoDB 引擎的主键索引是一棵B+树结构，为了维护索引数据的有序性，会对新增数据进行比较，如果大于最大值，则只需要在最后记录后面插入一个新记录，如果小于，那么会去查找应该插入的具体位置。&lt;/p&gt;
+&lt;h5 id=&#34;页分裂&#34;&gt;页分裂&lt;/h5&gt;
+&lt;p&gt;由于数据页的大小默认是16KB，如果恰巧要插入数据的数据页已满，就需要在此位置申请一个新的数据页，然后迁移部分数据过去，这个过程称为页分裂。&lt;/p&gt;
+&lt;p&gt;所以，如果我们的主键是自增的，那么每次新增数据，都会直接在最大记录后插入，非常高效。&lt;/p&gt;
+&lt;h4 id=&#34;空间问题&#34;&gt;空间问题&lt;/h4&gt;
+&lt;h5 id=&#34;页空洞&#34;&gt;页空洞&lt;/h5&gt;
+&lt;p&gt;如果主键是非自增的，除了要在插入过程中，经过多次比较、页分裂导致数据挪动等额外的耗时操作外，还会产生页空洞，致使空间利用率下降。&lt;/p&gt;
+&lt;h5 id=&#34;辅助索引&#34;&gt;辅助索引&lt;/h5&gt;
+&lt;p&gt;当我们为了高效多维度查询，对一张表创建了多个辅助索引时，辅助索引的叶子节点存储的是主键值。&lt;/p&gt;
+&lt;p&gt;如果我们使用业务上的唯一ID来做主键，由于一般业务上的唯一ID为了保证唯一性，生成的ID可能较长，那么所有辅助索引的叶子节点数据都会变大。   &lt;br&gt;
+例如，用18位身份证号做主键，刨除其他额外信息，需要18个字节，而如果使用整型自增，则只需要4字节。&lt;/p&gt;
+&lt;p&gt;综上来看，无论是从性能上，还是空间占用上，我们确实应该使用自增ID列做主键，而不应该使用业务唯一ID来做主键。&lt;/p&gt;
+&lt;p&gt;那么，所有场景都该如此吗？不，当然不是。&lt;/p&gt;
+&lt;h3 id=&#34;业务唯一id适合作为主键的场景&#34;&gt;业务唯一ID适合作为主键的场景&lt;/h3&gt;
+&lt;p&gt;什么场景下，我们可以使用业务唯一ID来做主键呢？&lt;/p&gt;
+&lt;h4 id=&#34;有限场景一&#34;&gt;有限场景一&lt;/h4&gt;
+&lt;ul&gt;
+&lt;li&gt;业务唯一ID必须是自增趋势的&lt;/li&gt;
+&lt;li&gt;只会有一个主键索引&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;如果同时满足以上两点，那么使用业务唯一ID作为主键是最佳的。&lt;/p&gt;
+&lt;p&gt;因为如果此时，再去建立自增ID列，那么必然要基于业务唯一ID建立辅助索引，我们知道，由于自增ID是不会在业务中被使用的，所以我们的查询，都要基于业务唯一ID来进行，这样将会在每次查询时，造成回表。&lt;/p&gt;
+&lt;p&gt;所以，使用业务唯一ID作为主键既避免了回表操作，又保证了主键的递增趋势，也不需要创建辅助索引，一举三得。&lt;/p&gt;
+&lt;h4 id=&#34;有限场景二&#34;&gt;有限场景二&lt;/h4&gt;
+&lt;ul&gt;
+&lt;li&gt;读多写少&lt;/li&gt;
+&lt;li&gt;数据量小&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;假设你的业务唯一ID不是自增趋势，是否可以使用它做主键呢？&lt;br&gt;
+答案是可以。&lt;/p&gt;
+&lt;p&gt;但要满足以上两个条件，第一是，这张表，必须是读多写少的，例如我曾在一家在线教育公司任职，课程产品表，就是一个读多写极少，且数据量很小的表，即使课程唯一ID无序，也完全可以作为主键，对性能几乎无影响，新增频率极低。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;总结&#34;&gt;总结&lt;/h3&gt;
+&lt;p&gt;其实当我们的软硬件资源足够充沛，并可预见的能持续保持时，我们可以减少一些开发、设计细节上的斟酌和处理，但是，思考却不能敷衍。&lt;/p&gt;
+&lt;p&gt;不同的外部条件下，我们的行为可能会做出调整或取舍，但思考必须是细致的、全面的、尽力的，为作品，也为自己的成长。&lt;/p&gt;
+&lt;p&gt;个人博客：HanYu.me&lt;br&gt;
+技术网站：404.site&lt;br&gt;
+公众号： &lt;a href=&#34;https://mp.weixin.qq.com/s?__biz=MzI1MTE2MTE2OQ==&amp;amp;mid=2650067595&amp;amp;idx=1&amp;amp;sn=f386855822593b5e4ccf5050c9c6a2e0&amp;amp;chksm=f1f74db5c680c4a3f291288a583d9a86c256681aa1808010d6fc74ddd47e6d5c4c56845fe6d4&amp;amp;token=180910393&amp;amp;lang=zh_CN#rd&#34;&gt;今天404&lt;/a&gt;&lt;/p&gt;
+</description>
+    </item>
+    
+    
+     
+    
+     
+    
+     
+    
+    
+    <item>
+      <title>成为别人，而非自己</title>
+      <link>https://blog.hanyu.me/life/26/</link>
+      <pubDate>Mon, 05 Feb 2024 18:22:00 +0800</pubDate>
+      
+      <guid>https://blog.hanyu.me/life/26/</guid>
+      <description>&lt;p&gt;我不对。&lt;/p&gt;
+&lt;p&gt;这一年，频繁的将注意力放在一些不重要的、细微的事物上。&lt;/p&gt;
+&lt;p&gt;这让我迷失，浪费了大量的时间与心力，变得缺乏目标感、缺少行动力，无论是同比，还是环比，自身不仅没有成长和进步，甚至在倒退。&lt;/p&gt;
+&lt;p&gt;现在我意识到，找到正确的目标，并且持续刺激自己，专注向目标行进，非常重要。&lt;/p&gt;
+&lt;p&gt;可以找一个或两个人，作为我的目标，想办法成为他，让我的目标和期待，具象化。&lt;/p&gt;
+&lt;p&gt;我不认同那些鸡汤中所谓的“不要成为别人，成为自己才是好的”。&lt;br&gt;
+不！我并不好，所以我才要成为我所崇拜的人的模样，那个人应该是谁呢？&lt;/p&gt;
+&lt;p&gt;也许是风度翩翩、成绩斐然的周受资，又或者阳光上进、行动力爆棚的彭于晏，再或者腹有诗书气自华的董宇辉？&lt;/p&gt;
+&lt;p&gt;当确定好想成为的那个具象的人，并且时刻意识到差距，将差距切分成段，倒逼自己一步一步，两步两步的达成，非常重要。&lt;/p&gt;
+&lt;p&gt;当对自己十分不满时，问题已经开始严重，及时止损，清醒头脑。&lt;/p&gt;
+&lt;p&gt;除了具象化的目标、专注的行动力，也需要做到以下两点：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;保持嫉妒心、攀比心，适当关注张三家买豪车、李四家买豪宅，时刻明确自己生活的水位线&lt;/li&gt;
+&lt;li&gt;持续打击自己，而非激励，不要自我麻痹，自信无需重建，打击是工具，自信是底层&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;所以，请成为最好的别人，而非最好的自己。&lt;/p&gt;
+&lt;p&gt;以上，&lt;strong&gt;如不认同，无需理解&lt;/strong&gt;，拜拜。&lt;/p&gt;
+</description>
+    </item>
+    
+    
+     
+    
+     
+    
+    
+    <item>
+      <title>为什么小白更该使用静态博客</title>
+      <link>https://blog.hanyu.me/life/27/</link>
+      <pubDate>Sun, 08 Oct 2023 16:40:00 +0800</pubDate>
+      
+      <guid>https://blog.hanyu.me/life/27/</guid>
+      <description>&lt;blockquote&gt;
+&lt;p&gt;（＾∀＾）。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 id=&#34;背景&#34;&gt;背景&lt;/h2&gt;
+&lt;p&gt;我是很抗拒写各种折腾类、教程类的文字的。&lt;/p&gt;
+&lt;p&gt;但最近群里小伙伴的云服务器持续被探测扫描、数据库间歇性瘫痪，我想还是简单分享下我的思考。&lt;/p&gt;
+&lt;p&gt;对于有技术能力的人来说，可以排查问题所在，但对不懂技术的博主们，排查问题几乎摸不着头脑的。&lt;/p&gt;
+&lt;p&gt;我给他的建议是，使用静态博客生成器。&lt;/p&gt;
+&lt;p&gt;我很少去推荐别人使用什么类型的博客系统，因为个体需求差异很大，我作为一个研发工程师，很容易想当然的，把一些对于别人很复杂的动作当成很简单的样子，这可能会让我陷入“何不食肉糜”。&lt;/p&gt;
+&lt;h2 id=&#34;名词&#34;&gt;名词&lt;/h2&gt;
+&lt;p&gt;我先用极其简陋的描述，形容静态和动态两种博客的区别。&lt;/p&gt;
+&lt;h3 id=&#34;静态&#34;&gt;静态&lt;/h3&gt;
+&lt;p&gt;静态，其实应该叫静态生成器，它本质上是一个编译、转换工具，可以想象成一个电饭煲把生米变成熟米，米熟了之后和电饭煲就没有任何关系了。&lt;br&gt;
+或者理解成，美图工具把照片P完，这工具和照片就没关系了，下次再需要P图就再使用。&lt;/p&gt;
+&lt;p&gt;静态博客文件最终就是一堆html文件，你甚至可以用记事本打开直接编辑完保存即可。&lt;br&gt;
+把这堆html文件放到支持展示的地方即可访问，通用性、稳定性、兼容性几乎无可比拟。&lt;/p&gt;
+&lt;p&gt;静态博客生成器如：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Hugo&lt;/li&gt;
+&lt;li&gt;Hexo&lt;/li&gt;
+&lt;li&gt;Vuepress&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;动态&#34;&gt;动态&lt;/h3&gt;
+&lt;p&gt;动态应该叫做动态博客程序，这是一个持续运行的容器和程序，可以想象成汽车，你想使用就要一直启动，只要你熄火，那么车就无法行进了，所以要一直保持启动状态。&lt;/p&gt;
+&lt;p&gt;动态博客运行时需要服务器、数据库、缓存、博客程序本身等等，乍一看只是简单几部分，实则细究无穷。&lt;/p&gt;
+&lt;p&gt;动态博客程序如：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;WordPress&lt;/li&gt;
+&lt;li&gt;Typecho&lt;/li&gt;
+&lt;li&gt;Ghost&lt;/li&gt;
+&lt;li&gt;Halo&lt;/li&gt;
+&lt;li&gt;FarBox（托管）&lt;/li&gt;
+&lt;li&gt;BearBlog（托管）&lt;/li&gt;
+&lt;li&gt;Gridea（托管）&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;想了解更多更细节的，可以去自行查阅。&lt;/p&gt;
+&lt;h2 id=&#34;简述&#34;&gt;简述&lt;/h2&gt;
+&lt;p&gt;&lt;strong&gt;人们很容易在显而易见的问题上把问题搞反。&lt;/strong&gt;&lt;/p&gt;
+&lt;h3 id=&#34;什么人适合静态博客&#34;&gt;什么人适合静态博客&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;完全不懂技术&lt;/li&gt;
+&lt;li&gt;只懂得一点技术&lt;/li&gt;
+&lt;li&gt;不愿意折腾&lt;/li&gt;
+&lt;li&gt;对内容丢失无法容忍&lt;/li&gt;
+&lt;li&gt;没钱&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;什么人适合动态博客&#34;&gt;什么人适合动态博客&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;爱折腾&lt;/li&gt;
+&lt;li&gt;精通技术（包括但不限于服务器、数据库、缓存、网络、排查能力）&lt;/li&gt;
+&lt;li&gt;有钱&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;以上是不是和你的理解正好相反。&lt;/p&gt;
+&lt;h3 id=&#34;为什么&#34;&gt;为什么&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;一个动态博客程序，在运行期间，是有无数种变数的，如：&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;服务器端口是否开放、防火墙是否放行、Cpu是否被其他程序打满100%、内存是否被打爆、网络是否通畅、连接数是否正常、硬盘读写是否正常&lt;/li&gt;
+&lt;li&gt;博客程序本身是否有Bug、插件是否有漏洞、评论是否有漏洞、机器是否缺少博客程序的运行环境&lt;/li&gt;
+&lt;li&gt;数据库是否Hang住、是否发生死锁、吞吐是否异常、特殊字符编码是否支持&lt;/li&gt;
+&lt;li&gt;缓存是否击穿、穿透、雪崩&lt;/li&gt;
+&lt;li&gt;Nginx是否配置正确、证书是否自动续期&lt;/li&gt;
+&lt;li&gt;机器、博客程序、类宝塔面板等常用程序是否被探测扫描&lt;/li&gt;
+&lt;li&gt;被DDOS或CC时你是否能进入机器备份数据&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这一系列的问题，都是你在每一天、每一刻，将面对的变数。&lt;br&gt;
+然而随便拿出几项，如果你没有技术能力，都是极其难掌控和处理的，最终的结果就是站进入黑洞、数据丢失、被挂恶意程序、被劫持等。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;我们反观静态博客，如Hugo：&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;电脑下载或安装Hugo、安装Git（如果不用Hugo甚至不需要），比安装微信复杂一点点&lt;/li&gt;
+&lt;li&gt;打开你电脑中几乎一定存在的终端工具，执行几个命令&lt;/li&gt;
+&lt;li&gt;将你写的Markdown内容生成转换为html文件&lt;/li&gt;
+&lt;li&gt;将这些html文件上传到COS（有图形化工具不需要使用Git）、OSS（有图形化工具不需要使用Git）、github、服务器上的nginx都可&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;那些你洋洋洒洒写下的Markdown文件就在你面前，你的安全感十足。&lt;br&gt;
+运行期间，除了DDOS和CC攻击外，你不需要担心任何机器、程序、数据库、缓存等等问题，这些问题都交给了极其专业的基础设施提供者，你只需要安心写你的东西，然后敲打几个命令，内容就被安全无误的上传到安全地带，数据天然本地和云端双重备份，你的安全感由十足变百足。&lt;/p&gt;
+&lt;h2 id=&#34;结论&#34;&gt;结论&lt;/h2&gt;
+&lt;p&gt;动态，代表着运行时无穷无尽的变化与未知，任何一个节点出现问题，都可能牵一发而动全身，机器与机器、线路与线路、程序与程序、库与库、表与表之间的关联关系错综复杂，相互协作。 &lt;br&gt;
+技术小白是缺少对于变化、异常情况的掌控能力的，而这种变化又可能在任何时刻发生，你也不想每时每刻都担心对嘛。&lt;/p&gt;
+&lt;p&gt;静态，代表着第一次会复杂一点，但在后续你的使用、博客的运行时，将稳如泰山。 &lt;br&gt;
+所以，我更推荐技术小白使用静态，就像你第一次学骑车🚴🏻，刚起步会有点难度，但骑了几次后，你甚至从未再忧虑过该怎么起步、怎么前进、怎么保持平衡。&lt;/p&gt;
+&lt;p&gt;什么？？？你说静态博客出问题会不会更难解决？&lt;br&gt;
+不，静态博客不会出问题，如果出问题，那就是你的问题，hhhh.&lt;/p&gt;
+&lt;p&gt;以上，个人拙见，不喜&lt;strong&gt;可&lt;/strong&gt;喷，拜拜👋🏻。&lt;/p&gt;
+</description>
+    </item>
+    
+    
+     
+    
+  </channel>
+</rss>
